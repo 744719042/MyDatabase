@@ -1,4 +1,4 @@
-package com.example.mydatabase.entity;
+package com.example.mydatabase.simple.entity;
 
 public class Student {
     private int id;

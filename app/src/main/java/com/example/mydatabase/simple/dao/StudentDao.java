@@ -3,7 +3,7 @@ package com.example.mydatabase.simple.dao;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 
-import com.example.mydatabase.entity.Student;
+import com.example.mydatabase.simple.entity.Student;
 
 import java.util.ArrayList;
 import java.util.List;
