@@ -22,7 +22,7 @@ public interface StudentDao {
     void delete(int id);
 
     @Load
-    void load(int id);
+    Student load(int id);
 
     @Query("SELECT * FROM student WHERE age > ? and id > ?")
     List<Student> query(int age, int id);

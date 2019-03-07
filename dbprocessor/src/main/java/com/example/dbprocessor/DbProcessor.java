@@ -10,6 +10,8 @@ import com.example.dbannotation.annotation.Query;
 import com.example.dbannotation.annotation.Table;
 import com.example.dbannotation.annotation.Update;
 
+import java.io.IOException;
+import java.io.Writer;
 import java.sql.BatchUpdateException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -33,8 +35,10 @@ import javax.lang.model.element.PackageElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.DeclaredType;
+import javax.lang.model.type.TypeKind;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
+import javax.tools.JavaFileObject;
 
 // https://docs.oracle.com/javase/8/docs/api/
 // https://docs.oracle.com/javase/7/docs/technotes/guides/apt/GettingStarted.html
@@ -123,10 +127,19 @@ public class DbProcessor extends AbstractProcessor {
         builder.append(packageName).append(";").append(LINE_SEPARATOR);
         builder.append("public class ").append(className);
         builder.append(" implements ").append(dao.getQualifiedName().toString()).append(" {").append(LINE_SEPARATOR);
-        builder.append("protected com.example.sqlitelib.DBOpenHelper mDb;").append(LINE_SEPARATOR);
-        builder.append("public ").append(className).append("(com.example.sqlitelib.DBOpenHelper db) {").append(LINE_SEPARATOR);
+        builder.append("protected android.database.sqlite.SQLiteDatabase mDb;").append(LINE_SEPARATOR);
+        builder.append("public ").append(className).append("(android.database.sqlite.SQLiteDatabase db) {").append(LINE_SEPARATOR);
         builder.append("this.mDb = db;").append(LINE_SEPARATOR);
         builder.append("}").append(LINE_SEPARATOR);
+
+        List<? extends Element> elements = table.getEnclosedElements();
+        List<VariableElement> columns = new ArrayList<>();
+        for (Element variable : elements) {
+            if (variable instanceof VariableElement) {
+                columns.add((VariableElement) variable);
+            }
+        }
+
         for (Element element : dao.getEnclosedElements()) {
             if (element instanceof ExecutableElement) {
                 ExecutableElement method = (ExecutableElement) element;
@@ -135,6 +148,7 @@ public class DbProcessor extends AbstractProcessor {
                     List<? extends VariableElement> params = method.getParameters();
                     if (!CollectionUtils.isEmpty(params) && params.size() == 1) {
                         String paramName = params.get(0).getSimpleName().toString();
+                        String paramType = params.get(0).asType().toString();
                         Set<Modifier> modifierSet = method.getModifiers();
                         String methodName = method.getSimpleName().toString();
                         for (Modifier modifier : modifierSet) {
@@ -143,22 +157,14 @@ public class DbProcessor extends AbstractProcessor {
                             }
                         }
 
-                        List<? extends Element> elements = table.getEnclosedElements();
-                        List<VariableElement> columns = new ArrayList<>();
-                        for (Element variable : elements) {
-                            if (variable instanceof VariableElement) {
-                                columns.add((VariableElement) variable);
-                            }
-                        }
-
                         String insertSql = generateInsertSql(table, columns);
-                        builder.append("void ").append(methodName).append(" {").append(LINE_SEPARATOR);
-                        builder.append("mDb.execSQL(\"").append(insertSql).append("\"").append(",");
+                        builder.append("void ").append(methodName).append("(").append(paramType).append(" ").append(paramName).append(")").append(" {").append(LINE_SEPARATOR);
+                        builder.append("mDb.execSQL(\"").append(insertSql).append("\"").append(", new Object[] { ");
                         for (VariableElement variable : columns) {
                             builder.append(paramName).append(".get").append(TextUtils.capital(variable.getSimpleName().toString())).append("(),");
                         }
                         builder.deleteCharAt(builder.length() - 1);
-                        builder.append(");").append(LINE_SEPARATOR);
+                        builder.append("});").append(LINE_SEPARATOR);
                         builder.append("}").append(LINE_SEPARATOR);
                     }
                     continue;
@@ -168,6 +174,7 @@ public class DbProcessor extends AbstractProcessor {
                     List<? extends VariableElement> params = method.getParameters();
                     if (!CollectionUtils.isEmpty(params) && params.size() == 1) {
                         String paramName = params.get(0).getSimpleName().toString();
+                        String paramType = params.get(0).asType().toString();
                         Set<Modifier> modifierSet = method.getModifiers();
                         String methodName = method.getSimpleName().toString();
                         for (Modifier modifier : modifierSet) {
@@ -176,17 +183,9 @@ public class DbProcessor extends AbstractProcessor {
                             }
                         }
 
-                        List<? extends Element> elements = table.getEnclosedElements();
-                        List<VariableElement> columns = new ArrayList<>();
-                        for (Element variable : elements) {
-                            if (variable instanceof VariableElement) {
-                                columns.add((VariableElement) variable);
-                            }
-                        }
-
                         String deleteSql = generateDeleteSql(table, columns);
-                        builder.append("void ").append(methodName).append(" {").append(LINE_SEPARATOR);
-                        builder.append("mDb.execSQL(\"").append(deleteSql).append("\"").append(",");
+                        builder.append("void ").append(methodName).append("(").append(paramType).append(" ").append(paramName).append(")").append(" {").append(LINE_SEPARATOR);
+                        builder.append("mDb.execSQL(\"").append(deleteSql).append("\"").append(", new Object[] { ");;
                         for (VariableElement variable : columns) {
                             Id id = variable.getAnnotation(Id.class);
                             if (id != null) {
@@ -194,7 +193,7 @@ public class DbProcessor extends AbstractProcessor {
                                 break;
                             }
                         }
-                        builder.append(");").append(LINE_SEPARATOR);
+                        builder.append("});").append(LINE_SEPARATOR);
                         builder.append("}").append(LINE_SEPARATOR);
                     }
                     continue;
@@ -204,6 +203,7 @@ public class DbProcessor extends AbstractProcessor {
                     List<? extends VariableElement> params = method.getParameters();
                     if (!CollectionUtils.isEmpty(params) && params.size() == 1) {
                         String paramName = params.get(0).getSimpleName().toString();
+                        String paramType = params.get(0).asType().toString();
                         Set<Modifier> modifierSet = method.getModifiers();
                         String methodName = method.getSimpleName().toString();
                         for (Modifier modifier : modifierSet) {
@@ -212,30 +212,23 @@ public class DbProcessor extends AbstractProcessor {
                             }
                         }
 
-                        List<? extends Element> elements = table.getEnclosedElements();
-                        List<VariableElement> columns = new ArrayList<>();
-                        for (Element variable : elements) {
-                            if (variable instanceof VariableElement) {
-                                columns.add((VariableElement) variable);
-                            }
-                        }
-
                         String updateSql = generateUpdateSql(table, columns);
-                        builder.append("void ").append(methodName).append(" {").append(LINE_SEPARATOR);
-                        builder.append("mDb.execSQL(\"").append(updateSql).append("\"").append(",");
+                        builder.append("void ").append(methodName).append("(").append(paramType).append(" ").append(paramName).append(")").append(" {").append(LINE_SEPARATOR);
+                        builder.append("mDb.execSQL(\"").append(updateSql).append("\"").append(", new Object[] { ");
                         for (VariableElement variable : columns) {
-                            Id id = element.getAnnotation(Id.class);
+                            Id id = variable.getAnnotation(Id.class);
                             if (id == null) {
                                 builder.append(paramName).append(".get").append(TextUtils.capital(variable.getSimpleName().toString())).append("(),");
                             }
                         }
+
                         for (VariableElement variable : columns) {
-                            Id id = element.getAnnotation(Id.class);
+                            Id id = variable.getAnnotation(Id.class);
                             if (id != null) {
                                 builder.append(paramName).append(".get").append(TextUtils.capital(variable.getSimpleName().toString())).append("()");
                             }
                         }
-                        builder.append(");").append(LINE_SEPARATOR);
+                        builder.append("});").append(LINE_SEPARATOR);
                         builder.append("}").append(LINE_SEPARATOR);
                     }
                     continue;
@@ -245,6 +238,7 @@ public class DbProcessor extends AbstractProcessor {
                     List<? extends VariableElement> params = method.getParameters();
                     if (!CollectionUtils.isEmpty(params) && params.size() == 1) {
                         String paramName = params.get(0).getSimpleName().toString();
+                        String paramType = params.get(0).asType().toString();
                         Set<Modifier> modifierSet = method.getModifiers();
                         String methodName = method.getSimpleName().toString();
                         for (Modifier modifier : modifierSet) {
@@ -253,21 +247,13 @@ public class DbProcessor extends AbstractProcessor {
                             }
                         }
 
-                        List<? extends Element> elements = table.getEnclosedElements();
-                        List<VariableElement> columns = new ArrayList<>();
-                        for (Element variable : elements) {
-                            if (variable instanceof VariableElement) {
-                                columns.add((VariableElement) variable);
-                            }
-                        }
-
                         String loadSql = generateLoadSql(table, columns);
-                        builder.append("void ").append(methodName).append(" {").append(LINE_SEPARATOR);
+                        builder.append(table.getQualifiedName().toString()).append(" ").append(methodName).append("(").append(paramType).append(" ").append(paramName).append(")").append(" {").append(LINE_SEPARATOR);
                         builder.append("android.database.Cursor cursor = mDb.rawQuery(\"").append(loadSql).append("\"").append(", new String[] { String.valueOf(");
                         for (VariableElement variable : columns) {
-                            Id id = element.getAnnotation(Id.class);
+                            Id id = variable.getAnnotation(Id.class);
                             if (id != null) {
-                                builder.append(paramName).append(".get").append(TextUtils.capital(variable.getSimpleName().toString())).append("())}");
+                                builder.append(paramName).append(")}");
                             }
                         }
                         builder.append(");").append(LINE_SEPARATOR);
@@ -281,48 +267,99 @@ public class DbProcessor extends AbstractProcessor {
                 }
                 Query query = method.getAnnotation(Query.class);
                 if (query != null) {
-                    List<? extends VariableElement> params = method.getParameters();
-                    if (!CollectionUtils.isEmpty(params) && params.size() == 1) {
-                        String paramName = params.get(0).getSimpleName().toString();
-                        Set<Modifier> modifierSet = method.getModifiers();
-                        String methodName = method.getSimpleName().toString();
-                        for (Modifier modifier : modifierSet) {
-                            if (modifier != Modifier.ABSTRACT) {
-                                builder.append(modifier.toString()).append(" ");
-                            }
+                    Set<Modifier> modifierSet = method.getModifiers();
+                    String methodName = method.getSimpleName().toString();
+                    for (Modifier modifier : modifierSet) {
+                        if (modifier != Modifier.ABSTRACT) {
+                            builder.append(modifier.toString()).append(" ");
                         }
-
-                        List<? extends Element> elements = table.getEnclosedElements();
-                        List<VariableElement> columns = new ArrayList<>();
-                        for (Element variable : elements) {
-                            if (variable instanceof VariableElement) {
-                                columns.add((VariableElement) variable);
-                            }
-                        }
-
-                        String loadSql = generateLoadSql(table, columns);
-                        builder.append("void ").append(methodName).append(" {").append(LINE_SEPARATOR);
-                        builder.append("android.database.Cursor cursor = mDb.rawQuery(\"").append(loadSql).append("\"").append(", new String[] { String.valueOf(");
-                        for (VariableElement variable : columns) {
-                            Id id = element.getAnnotation(Id.class);
-                            if (id != null) {
-                                builder.append(paramName).append(".get").append(TextUtils.capital(variable.getSimpleName().toString())).append("())}");
-                            }
-                        }
-                        builder.append(");").append(LINE_SEPARATOR);
-                        builder.append("if (cursor.moveToFirst()) {").append(LINE_SEPARATOR);
-                        builder.append(" return new").append(table.getSimpleName().toString()).append("(cursor);").append(LINE_SEPARATOR);
-                        builder.append("}").append(LINE_SEPARATOR);
-                        builder.append("return null;").append(LINE_SEPARATOR);
-                        builder.append("}").append(LINE_SEPARATOR);
                     }
+
+                    String loadSql = query.value();
+                    List<? extends VariableElement> params = method.getParameters();
+                    builder.append("java.util.List<").append(table.getQualifiedName().toString()).append("> ").append(methodName).append("(");
+                    if (!CollectionUtils.isEmpty(params)) {
+                        for (VariableElement variableElement : params) {
+                            builder.append(variableElement.asType().toString()).append(" ").append(variableElement.getSimpleName().toString()).append(",");
+                        }
+                        builder.deleteCharAt(builder.length() - 1);
+                    }
+                    builder.append(")").append(" {").append(LINE_SEPARATOR);
+                    builder.append("android.database.Cursor cursor = mDb.rawQuery(\"").append(loadSql).append("\", new String[] { ");
+                    if (!CollectionUtils.isEmpty(params)) {
+                        for (VariableElement variableElement : params) {
+                            builder.append("String.valueOf(").append(variableElement.getSimpleName().toString()).append("),");
+                        }
+                        builder.deleteCharAt(builder.length() - 1);
+                    }
+                    builder.append("});").append(LINE_SEPARATOR);
+                    builder.append("java.util.List<").append(table.getQualifiedName().toString()).append("> list = new java.util.ArrayList<>();").append(LINE_SEPARATOR);
+                    builder.append("while (cursor.moveToNext()) {").append(LINE_SEPARATOR);
+                    builder.append(table.getQualifiedName().toString()).append(" obj = ").append("new").append(table.getSimpleName().toString()).append("(cursor);").append(LINE_SEPARATOR);
+                    builder.append("list.add(obj);").append(LINE_SEPARATOR);
+                    builder.append("}").append(LINE_SEPARATOR);
+                    builder.append("return list;").append(LINE_SEPARATOR);
+                    builder.append("}").append(LINE_SEPARATOR);
                     continue;
                 }
             }
         }
 
-        System.out.println(builder.toString());
-        return packageName + "." + className;
+        generateNewMethod(builder, table, columns);
+        builder.append("}");
+//        System.out.println(builder.toString());
+
+        String fullName = packageName + "." + className;
+        try {
+            JavaFileObject javaFileObject = mFiler.createSourceFile(fullName, (Element[]) null);
+            Writer writer = javaFileObject.openWriter();
+            writer.append(builder.toString());
+            writer.flush();
+            writer.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return fullName;
+    }
+
+    private void generateNewMethod(StringBuilder builder, TypeElement table, List<VariableElement> columns) {
+        builder.append("private ").append(table.getQualifiedName().toString()).append(" new");
+        builder.append(table.getSimpleName().toString()).append("(android.database.Cursor cursor) {").append(LINE_SEPARATOR);
+        builder.append(table.getQualifiedName().toString()).append(" obj = new ").append(table.getQualifiedName().toString()).append("();").append(LINE_SEPARATOR);
+        for (VariableElement variableElement : columns) {
+            TypeKind typeKind = variableElement.asType().getKind();
+            if (typeKind == TypeKind.INT || typeKind == TypeKind.SHORT || typeKind == TypeKind.BYTE) {
+                String type = typeKind == TypeKind.INT ? "int" : typeKind == TypeKind.SHORT ? "short" : "byte";
+                builder.append("int ").append(variableElement.getSimpleName().toString()).append(" = cursor.getInt");
+                builder.append("(cursor.getColumnIndex(\"").append(variableElement.getSimpleName().toString()).append("\"));").append(LINE_SEPARATOR);
+                builder.append("obj.set").append(TextUtils.capital(variableElement.getSimpleName().toString())).append("(").append("(").append(type).append(")").append(variableElement.getSimpleName().toString()).append(");").append(LINE_SEPARATOR);;
+
+            } else if (typeKind == TypeKind.LONG) {
+                builder.append("long ").append(variableElement.getSimpleName().toString()).append(" = cursor.getLong");
+                builder.append("(cursor.getColumnIndex(\"").append(variableElement.getSimpleName().toString()).append("\")));").append(LINE_SEPARATOR);
+                builder.append("obj.set").append(TextUtils.capital(variableElement.getSimpleName().toString())).append("(").append(variableElement.getSimpleName().toString()).append(");").append(LINE_SEPARATOR);;
+            } else if (typeKind == TypeKind.FLOAT) {
+                builder.append("float ").append(variableElement.getSimpleName().toString()).append(" = cursor.getFloat");
+                builder.append("(cursor.getColumnIndex(\"").append(variableElement.getSimpleName().toString()).append("\")));").append(LINE_SEPARATOR);
+                builder.append("obj.set").append(TextUtils.capital(variableElement.getSimpleName().toString())).append("(").append(variableElement.getSimpleName().toString()).append(");").append(LINE_SEPARATOR);;
+            } else if (typeKind == TypeKind.DOUBLE) {
+                builder.append("double ").append(variableElement.getSimpleName().toString()).append(" = cursor.getDouble");
+                builder.append("(cursor.getColumnIndex(\"").append(variableElement.getSimpleName().toString()).append("\")));").append(LINE_SEPARATOR);
+                builder.append("obj.set").append(TextUtils.capital(variableElement.getSimpleName().toString())).append("(").append(variableElement.getSimpleName().toString()).append(");").append(LINE_SEPARATOR);;
+            } else {
+                if (typeKind == TypeKind.BOOLEAN) {
+                    builder.append("String ").append(variableElement.getSimpleName().toString()).append(" = cursor.getString");
+                    builder.append("(cursor.getColumnIndex(\"").append(variableElement.getSimpleName().toString()).append("\")));").append(LINE_SEPARATOR);
+                    builder.append("obj.set").append(TextUtils.capital(variableElement.getSimpleName().toString())).append("(").append("\"true\".equals(").append(variableElement.getSimpleName().toString()).append("));").append(LINE_SEPARATOR);;
+                } else {
+                    builder.append("String ").append(variableElement.getSimpleName().toString()).append(" = cursor.getString");
+                    builder.append("(cursor.getColumnIndex(\"").append(variableElement.getSimpleName().toString()).append("\"));").append(LINE_SEPARATOR);
+                    builder.append("obj.set").append(TextUtils.capital(variableElement.getSimpleName().toString())).append("(").append(variableElement.getSimpleName().toString()).append(");").append(LINE_SEPARATOR);;
+                }
+            }
+        }
+        builder.append("return obj;").append(LINE_SEPARATOR);
+        builder.append("}").append(LINE_SEPARATOR);
     }
 
     private String generateLoadSql(TypeElement table, List<VariableElement> columns) {

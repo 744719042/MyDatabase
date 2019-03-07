@@ -6,7 +6,6 @@ import com.example.dbannotation.annotation.Insert;
 import com.example.dbannotation.annotation.Load;
 import com.example.dbannotation.annotation.Query;
 import com.example.dbannotation.annotation.Update;
-import com.example.mydatabase.apt.entity.Student;
 import com.example.mydatabase.apt.entity.Teacher;
 
 import java.util.List;
@@ -23,8 +22,8 @@ public interface TeacherDao {
     void delete(int id);
 
     @Load
-    void load(int id);
+    Teacher load(int id);
 
     @Query("SELECT * FROM teacher WHERE name = ?")
-    List<Student> query(String name);
+    List<Teacher> query(String name);
 }
