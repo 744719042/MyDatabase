@@ -5,7 +5,7 @@ import com.example.dbannotation.annotation.Database;
 import com.example.mydatabase.apt.dao.StudentDao;
 import com.example.mydatabase.apt.entity.Student;
 import com.example.mydatabase.apt.entity.Teacher;
-import com.example.mydatabase.simple.dao.TeacherDao;
+import com.example.mydatabase.apt.dao.TeacherDao;
 
 @Database(tables = { Student.class, Teacher.class}, version = 1, name = "grade.db")
 public abstract class DbManager extends AbsDatabase {

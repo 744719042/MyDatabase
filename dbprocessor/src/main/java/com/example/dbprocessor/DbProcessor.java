@@ -3,6 +3,8 @@ package com.example.dbprocessor;
 import com.example.dbannotation.annotation.Dao;
 import com.example.dbannotation.annotation.Database;
 import com.example.dbannotation.annotation.Delete;
+import com.example.dbannotation.annotation.GenerateType;
+import com.example.dbannotation.annotation.GeneratedValue;
 import com.example.dbannotation.annotation.Id;
 import com.example.dbannotation.annotation.Insert;
 import com.example.dbannotation.annotation.Load;
@@ -36,6 +38,7 @@ import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeKind;
+import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
 import javax.tools.JavaFileObject;
@@ -116,7 +119,149 @@ public class DbProcessor extends AbstractProcessor {
     }
 
     private void generateDatabase(TypeElement database, String dbName, int dbVersion, Set<TypeElement> tables, Set<String> generateDaos) {
+        PackageElement packageElement = (PackageElement) database.getEnclosingElement();
 
+        List<? extends Element> elementList = database.getEnclosedElements();
+        List<ExecutableElement> methodList = new ArrayList<>();
+        for (Element element :elementList) {
+            if (element instanceof ExecutableElement) {
+                ExecutableElement executableElement = (ExecutableElement) element;
+                if (executableElement.getSimpleName().contentEquals("onDBCreate") ||
+                        executableElement.getSimpleName().contentEquals("onDBUpgrade")) {
+                    continue;
+                }
+
+                Set<Modifier> modifiers = executableElement.getModifiers();
+                for (Modifier modifier : modifiers) {
+                    if (Modifier.ABSTRACT.name().equals(modifier.name())) {
+                        methodList.add(executableElement);
+                        break;
+                    }
+                }
+            }
+        }
+
+        String packageName = packageElement.getQualifiedName().toString();
+        String className = database.getSimpleName().toString() + "Impl";
+        StringBuilder builder = new StringBuilder();
+        builder.append("package ").append(packageName).append(";").append(LINE_SEPARATOR);
+        builder.append("public class ").append(className).append(" extends ").append(database.getSimpleName().toString()).append(" {").append(LINE_SEPARATOR);
+        builder.append("private android.database.sqlite.SQLiteDatabase mDb;").append(LINE_SEPARATOR);
+        builder.append("private static android.content.Context sContext;").append(LINE_SEPARATOR);
+        builder.append("private static ").append(packageName).append(".").append(className).append(" sInstance;").append(LINE_SEPARATOR);
+        builder.append("public static void init(android.content.Context context) {").append(LINE_SEPARATOR);
+        builder.append("sContext = context;").append(LINE_SEPARATOR);
+        builder.append("}").append(LINE_SEPARATOR);
+        builder.append("private ").append(className).append("() {").append(LINE_SEPARATOR);
+        builder.append("DBOpenHelper helper = new DBOpenHelper(sContext, \"").append(dbName).append("\", ").append(dbVersion).append(");").append(LINE_SEPARATOR);
+        builder.append("try {").append(LINE_SEPARATOR);
+        builder.append("mDb = helper.getWritableDatabase();").append(LINE_SEPARATOR);
+        builder.append("} catch (Exception e) {").append(LINE_SEPARATOR);
+        builder.append("e.printStackTrace();").append(LINE_SEPARATOR);
+        builder.append("}").append(LINE_SEPARATOR);
+        builder.append("}").append(LINE_SEPARATOR);
+
+        builder.append("class DBOpenHelper extends android.database.sqlite.SQLiteOpenHelper {").append(LINE_SEPARATOR);
+        builder.append("public DBOpenHelper(android.content.Context context, String dbName, int version) {").append(LINE_SEPARATOR);
+        builder.append("super(context, dbName, null, version);").append(LINE_SEPARATOR);
+        builder.append("}").append(LINE_SEPARATOR);
+
+        builder.append("public void onCreate(android.database.sqlite.SQLiteDatabase db) {").append(LINE_SEPARATOR);
+        for (TypeElement typeElement : tables) {
+            String createSql = generateCreateSql(typeElement);
+            builder.append("db.execSQL(\"").append(createSql).append("\");").append(LINE_SEPARATOR);
+        }
+        builder.append("onDBCreate(db);");
+        builder.append("}").append(LINE_SEPARATOR);
+
+        builder.append("public void onUpgrade(android.database.sqlite.SQLiteDatabase db, int oldVersion, int newVersion) {").append(LINE_SEPARATOR);
+        builder.append("onDBUpgrade(db, oldVersion, newVersion);").append(LINE_SEPARATOR);
+        builder.append("}").append(LINE_SEPARATOR);
+
+        builder.append("}").append(LINE_SEPARATOR);
+
+        for (ExecutableElement executableElement : methodList) {
+            TypeElement typeElement = (TypeElement) mTypes.asElement(executableElement.getReturnType());
+            for (String name : generateDaos) {
+                if (name.contains(typeElement.getSimpleName().toString())) {
+                    Set<Modifier> modifierSet = executableElement.getModifiers();
+                    for (Modifier modifier : modifierSet) {
+                        if (!modifier.name().equals(Modifier.ABSTRACT.name())) {
+                            builder.append(modifier.toString()).append(" ");
+                        }
+                    }
+
+                    builder.append(typeElement.getQualifiedName().toString()).append(" ").append(executableElement.getSimpleName().toString()).append("() {").append(LINE_SEPARATOR);
+                    builder.append("return new ").append(name).append("(mDb);").append(LINE_SEPARATOR);
+                    builder.append("}").append(LINE_SEPARATOR);
+                }
+            }
+        }
+
+        builder.append("}").append(LINE_SEPARATOR);
+        System.out.println(builder.toString());
+        writeToFile(packageName + "." + className, builder.toString());
+    }
+
+    private void writeToFile(String fullName, String source) {
+        try {
+            JavaFileObject javaFileObject = mFiler.createSourceFile(fullName, (Element[]) null);
+            Writer writer = javaFileObject.openWriter();
+            writer.append(source);
+            writer.flush();
+            writer.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private String generateCreateSql(TypeElement table) {
+        List<? extends Element> elements = table.getEnclosedElements();
+        List<VariableElement> columns = new ArrayList<>();
+        VariableElement key = null;
+        Id keyId = null;
+        GeneratedValue generatedValue = null;
+        for (Element variable : elements) {
+            if (variable instanceof VariableElement) {
+                VariableElement variableElement = (VariableElement) variable;
+                Id id = variableElement.getAnnotation(Id.class);
+                if (id != null) {
+                    keyId = id;
+                    key = variableElement;
+                    generatedValue = variableElement.getAnnotation(GeneratedValue.class);
+                    continue;
+                }
+                columns.add(variableElement);
+            }
+        }
+
+        StringBuilder builder = new StringBuilder();
+        Table t = table.getAnnotation(Table.class);
+        String tableName = TextUtils.isEmpty(t.name()) ? table.getSimpleName().toString() : t.name();
+        String idName = TextUtils.isEmpty(keyId.value()) ? key.getSimpleName().toString() : keyId.value();
+        String generateType = generatedValue == null ? "" : generatedValue.generateType() == GenerateType.AUTO_INCREMENT ? "autoincrement" : "";
+        builder.append("CREATE TABLE ")
+                .append(tableName)
+                .append("(")
+                .append(idName).append(" ").append(getSQLType(key.asType())).append(" primary key ").append(generateType).append(",");
+        for (VariableElement variableElement : columns) {
+            builder.append(variableElement.getSimpleName().toString()).append(" ").append(getSQLType(variableElement.asType())).append(",");
+        }
+        builder.deleteCharAt(builder.length() - 1);
+        builder.append(");");
+        return builder.toString();
+    }
+
+    public String getSQLType(TypeMirror typeMirror) {
+        if (typeMirror.getKind() == TypeKind.INT || typeMirror.getKind() == TypeKind.LONG || typeMirror.getKind() == TypeKind.SHORT) {
+            return "integer";
+        } else if (typeMirror.getKind() == TypeKind.DOUBLE || typeMirror.getKind() == TypeKind.FLOAT) {
+            return "real";
+        } else if (typeMirror.getKind() == TypeKind.BOOLEAN) {
+            return "varchar(10)";
+        } else {
+            return "varchar(255)";
+        }
     }
 
     private String generateDao(PackageElement packageElement, TypeElement table, TypeElement dao) {
@@ -307,18 +452,8 @@ public class DbProcessor extends AbstractProcessor {
 
         generateNewMethod(builder, table, columns);
         builder.append("}");
-//        System.out.println(builder.toString());
-
         String fullName = packageName + "." + className;
-        try {
-            JavaFileObject javaFileObject = mFiler.createSourceFile(fullName, (Element[]) null);
-            Writer writer = javaFileObject.openWriter();
-            writer.append(builder.toString());
-            writer.flush();
-            writer.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        writeToFile(fullName, builder.toString());
         return fullName;
     }
 
