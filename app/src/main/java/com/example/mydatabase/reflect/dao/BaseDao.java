@@ -10,6 +10,7 @@ import com.example.mydatabase.reflect.annotation.GeneratedValue;
 import com.example.mydatabase.reflect.annotation.Id;
 import com.example.mydatabase.reflect.annotation.Table;
 import com.example.mydatabase.utils.CollectionUtils;
+import com.example.mydatabase.utils.IOUtils;
 import com.example.mydatabase.utils.LogUtils;
 
 import java.lang.reflect.Field;
@@ -267,17 +268,17 @@ public class BaseDao<T> {
             generateLoadSQL(fields);
         }
 
-        Cursor cursor = mDb.rawQuery(mLoadSql, new String[] { String.valueOf(key) });
-        if (cursor.moveToNext()) {
-            try {
+        Cursor cursor = null;
+        try {
+            cursor = mDb.rawQuery(mLoadSql, new String[]{String.valueOf(key)});
+            if (cursor.moveToNext()) {
                 return createEntity(cursor);
-            } catch (InstantiationException e) {
-                e.printStackTrace();
-            } catch (IllegalAccessException e) {
-                e.printStackTrace();
             }
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            IOUtils.close(cursor);
         }
-        cursor.close();
         return null;
     }
 
@@ -295,21 +296,21 @@ public class BaseDao<T> {
         List<T> list = new ArrayList<>();
         Field[] fields = getEntityClass().getDeclaredFields();
         if (CollectionUtils.isEmpty(fields)) {
-            return null;
+            return list;
         }
 
         String sql = "SELECT * FROM " + getTableName() + " WHERE " + where + ";";
-        Cursor cursor = mDb.rawQuery(sql, args);
-        while (cursor.moveToNext()) {
-            try {
+        Cursor cursor = null;
+        try {
+            cursor = mDb.rawQuery(sql, args);
+            while (cursor.moveToNext()) {
                 list.add(createEntity(cursor));
-            } catch (InstantiationException e) {
-                e.printStackTrace();
-            } catch (IllegalAccessException e) {
-                e.printStackTrace();
             }
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            IOUtils.close(cursor);
         }
-        cursor.close();
         return list;
     }
 
