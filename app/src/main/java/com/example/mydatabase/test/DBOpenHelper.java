@@ -18,7 +18,6 @@ public class DBOpenHelper extends SQLiteOpenHelper {
     @Override
     public void onCreate(SQLiteDatabase db) {
         StudentDao.createTable(db);
-        TeacherDao.createTable(db);
     }
 
     @Override

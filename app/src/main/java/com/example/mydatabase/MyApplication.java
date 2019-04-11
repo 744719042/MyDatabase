@@ -11,6 +11,7 @@ public class MyApplication extends Application {
     public void onCreate() {
         super.onCreate();
         DBManager.init(this);
+        com.example.mydatabase.test.DBManager.init(this);
         sContext = this;
     }
 

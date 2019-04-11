@@ -3,9 +3,7 @@ package com.example.mydatabase.test;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 
-import com.example.mydatabase.MyApplication;
 import com.example.mydatabase.simple.entity.Student;
-import com.example.mydatabase.utils.IOUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -14,88 +12,50 @@ public class StudentDao {
     private static final String INSERT = "INSERT INTO student(id, name, phone, address, age) VALUES(?, ?, ?, ?, ?)";
     private static final String UPDATE = "UPDATE student SET name = ?, phone = ?, address = ?, age = ? WHERE id = ?";
     private static final String DELETE = "delete from student WHERE id = ?";
-    private static final String LOAD = "SELECT * FROM student WHERE phone = ?";
+    private static final String LOAD = "SELECT * FROM student WHERE id = ?";
     private static final String QUERY_LIST = "SELECT * FROM student WHERE age < ?";
+
+    private SQLiteDatabase mDb;
+
+    public StudentDao(SQLiteDatabase db) {
+        this.mDb = db;
+    }
 
     public static void createTable(SQLiteDatabase db) {
         db.execSQL("create table student(id integer primary key, name varchar(255), phone varchar(128), address varchar(255), age integer);");
     }
 
+    public static void clearTable(SQLiteDatabase db) {
+        db.execSQL("delete from student;");
+    }
+
     public void save(Student student) {
-        DBOpenHelper helper = new DBOpenHelper(MyApplication.getContext());
-        SQLiteDatabase db = null;
-        try {
-            db = helper.getWritableDatabase();
-            db.execSQL(INSERT, new Object[] { student.getId(), student.getName(), student.getPhone(), student.getAddress(), student.getAge()});
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            IOUtils.close(db);
-        }
+        mDb.execSQL(INSERT, new Object[] { student.getId(), student.getName(), student.getPhone(), student.getAddress(), student.getAge()});
     }
 
     public void update(Student student) {
-        DBOpenHelper helper = new DBOpenHelper(MyApplication.getContext());
-        SQLiteDatabase db = null;
-        try {
-            db = helper.getWritableDatabase();
-            db.execSQL(UPDATE, new Object[] {  student.getName(), student.getPhone(), student.getAddress(), student.getAge(), student.getId()});
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            IOUtils.close(db);
-        }
+        mDb.execSQL(UPDATE, new Object[] {  student.getName(), student.getPhone(), student.getAddress(), student.getAge(), student.getId()});
     }
 
     public void delete(int id) {
-        DBOpenHelper helper = new DBOpenHelper(MyApplication.getContext());
-        SQLiteDatabase db = null;
-        try {
-            db = helper.getWritableDatabase();
-            db.execSQL(DELETE, new Object[] { id });
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            IOUtils.close(db);
-        }
+        mDb.execSQL(DELETE, new Object[] { id });
     }
 
     public Student load(int id) {
-        DBOpenHelper helper = new DBOpenHelper(MyApplication.getContext());
-        SQLiteDatabase db = null;
-        Cursor cursor = null;
-        try {
-            db = helper.getWritableDatabase();
-            cursor = db.rawQuery(LOAD, new String[] { String.valueOf(id) });
-            if (cursor.moveToFirst()) {
-                return getStudent(cursor);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            IOUtils.close(db);
-            IOUtils.close(cursor);
+        Cursor cursor = mDb.rawQuery(LOAD, new String[] { String.valueOf(id) });
+        if (cursor.moveToFirst()) {
+            return getStudent(cursor);
         }
+
         return null;
     }
 
     public List<Student> queryByAge(int age) {
-        DBOpenHelper helper = new DBOpenHelper(MyApplication.getContext());
+        Cursor cursor = mDb.rawQuery(QUERY_LIST, new String[] { String.valueOf(age) });
         List<Student> list = new ArrayList<>();
-        SQLiteDatabase db = null;
-        Cursor cursor = null;
-        try {
-            db = helper.getWritableDatabase();
-            cursor = db.rawQuery(QUERY_LIST, new String[] { String.valueOf(age) });
-            while (cursor.moveToNext()) {
-                Student student = getStudent(cursor);
-                list.add(student);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            IOUtils.close(db);
-            IOUtils.close(cursor);
+        while (cursor.moveToNext()) {
+            Student student = getStudent(cursor);
+            list.add(student);
         }
         return list;
     }
