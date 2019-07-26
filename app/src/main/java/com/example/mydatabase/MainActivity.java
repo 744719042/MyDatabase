@@ -8,7 +8,9 @@ import android.view.View;
 import com.example.mydatabase.simple.entity.Student;
 import com.example.mydatabase.test.DBManager;
 import com.example.mydatabase.test.DBOpenHelper;
+import com.example.mydatabase.test.DBReferenceManager;
 import com.example.mydatabase.test.StudentDao;
+import com.example.mydatabase.test.StudentDaoUseRef;
 
 import java.util.Random;
 
@@ -47,8 +49,9 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void run() {
             int start = index * 10000;
-//            final StudentDaoException dao =  new StudentDaoException();
-            final StudentDao dao = DBManager.getInstance().getStudentDao();
+//            final StudentDaoWithError dao =  new StudentDaoWithError();
+//            final StudentDao dao = DBManager.getInstance().getStudentDao();
+            final StudentDaoUseRef dao = DBReferenceManager.getInstance().getStudentDao();
             for (int i = start; i < start + 30; i++) {
                 Student student = new Student();
                 student.setId(i);
@@ -70,8 +73,9 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         public void run() {
-//            final StudentDaoException dao =  new StudentDaoException();
-            final StudentDao dao = DBManager.getInstance().getStudentDao();
+//            final StudentDaoWithError dao =  new StudentDaoWithError();
+//            final StudentDao dao = DBManager.getInstance().getStudentDao();
+            final StudentDaoUseRef dao = DBReferenceManager.getInstance().getStudentDao();
             final int start = index / 2 * 10000;
             if (index % 2 == 0) {
                 for (int i = start; i < start + 40; i++) {

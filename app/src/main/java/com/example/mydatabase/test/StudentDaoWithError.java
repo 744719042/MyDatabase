@@ -11,7 +11,7 @@ import com.example.mydatabase.utils.IOUtils;
 import java.util.ArrayList;
 import java.util.List;
 
-public class StudentDaoException {
+public class StudentDaoWithError {
     private static final String TAG = "StudentDao";
     private static final String INSERT = "INSERT INTO student(id, name, phone, address, age) VALUES(?, ?, ?, ?, ?)";
     private static final String UPDATE = "UPDATE student SET name = ?, phone = ?, address = ?, age = ? WHERE id = ?";
